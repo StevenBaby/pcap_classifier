@@ -20,7 +20,7 @@ packets_filename = os.path.join(dirname, 'data/packets.pickle')
 
 
 # 每个文件最大处理包数量
-TOTAL_PACKET = 64
+TOTAL_PACKET = 256
 
 
 # 是否需要忽略改包
