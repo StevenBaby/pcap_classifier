@@ -3,11 +3,11 @@
 import os
 import sys
 import glob
-import sqlite3
 from tqdm import tqdm
-import json
+import pickle
 
 from scapy.all import PcapReader
+from scapy.all import Ether, IP, TCP, UDP, DNS, Padding
 import numpy as np
 import matplotlib.pyplot as plt
 from logger import logger
@@ -16,65 +16,61 @@ from classify import *  # noqa
 plt.set_loglevel("info")
 
 dirname = os.path.dirname(__file__)
-train_database = os.path.join(dirname, 'data/train_packets.db')
-test_database = os.path.join(dirname, 'data/test_packets.db')
+packets_filename = os.path.join(dirname, 'data/packets.pickle')
+
 
 # 每个文件最大处理包数量
-TRAIN_PACKET = 256
-TEST_PACKET = 64
-
-CREATE_TABLES = [
-    '''
-    CREATE TABLE IF NOT EXISTS "packets" (
-        "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-        "index" integer NOT NULL,
-        "vpn" integer NOT NULL,
-        "type" integer NOT NULL,
-        "app" integer NOT NULL,
-        "content" blob(1024) NOT NULL
-    );'''
-]
+TOTAL_PACKET = 64
 
 
-def make_packets(train_cur, test_cur, filename):
+# 是否需要忽略改包
+def omit_packet(packet):
+    # SYN, ACK or FIN flags set to 1 and no payload
+    if TCP in packet and (packet.flags & 0x13):
+        # not payload or contains only padding
+        layers = packet[TCP].payload.layers()
+        if not layers or (Padding in layers and len(layers) == 1):
+            return True
+
+    # DNS segment
+    if DNS in packet:
+        return True
+
+    return False
+
+
+def make_packets(packets, filename):
     basename = os.path.basename(filename)
 
     vpn, type, app = TYPES[basename]
 
-    SQL = '''INSERT INTO
-        "packets"("index", "vpn", "type", "app", "content")
-        VALUES (?, ?, ?, ?, ?)'''
-
-    for idx, packet in tqdm(enumerate(PcapReader(filename))):
-        if idx < TRAIN_PACKET:
-            cur = train_cur
-        elif (idx - TRAIN_PACKET) < TEST_PACKET:
-            cur = test_cur
-        else:
+    idx = 0
+    for packet in tqdm(PcapReader(filename)):
+        if idx > TOTAL_PACKET:
             return
 
-        content = bytes(packet.payload)
+        if omit_packet(packet):
+            continue
+
+        idx += 1
+        if Ether in packet:
+            content = bytes(packet.payload)
+        else:
+            content = bytes(packet)
+
         content = content[:1024]
-        cur.execute(SQL, (idx, vpn, type, app, content))
+        packets.append((vpn, type, app, content))
 
 
 def main():
+    packets = []
     pattern = os.path.join(dirname, 'data/*/', '*.pcap*')
+    files = glob.glob(pattern)
+    for filename in files:
+        make_packets(packets, filename)
 
-    with sqlite3.connect(train_database) as train_db, sqlite3.connect(test_database) as test_db:
-        train_cur = train_db.cursor()
-        test_cur = test_db.cursor()
-
-        for sql in CREATE_TABLES:
-            train_cur.execute(sql)
-            test_cur.execute(sql)
-        pattern = os.path.join(dirname, 'data/*/', '*.pcap*')
-        files = glob.glob(pattern)
-        for filename in files:
-            make_packets(train_cur, test_cur, filename)
-
-        train_db.commit()
-        test_db.commit()
+    with open(packets_filename, 'wb') as file:
+        file.write(pickle.dumps(packets))
 
 
 if __name__ == '__main__':
