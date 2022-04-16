@@ -20,8 +20,8 @@ train_database = os.path.join(dirname, 'data/train_packets.db')
 test_database = os.path.join(dirname, 'data/test_packets.db')
 
 # 每个文件最大处理包数量
-TRAIN_PACKET = 128
-TEST_PACKET = 128
+TRAIN_PACKET = 256
+TEST_PACKET = 64
 
 CREATE_TABLES = [
     '''
