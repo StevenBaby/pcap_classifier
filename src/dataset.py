@@ -24,7 +24,7 @@ TOTAL_PACKET = 128
 MTU_LENGTH = 1024
 
 
-# 是否需要忽略改包
+# 是否需要忽略该包
 def omit_packet(packet):
     # SYN, ACK or FIN flags set to 1 and no payload
     if TCP in packet and (packet.flags & 0x13):
