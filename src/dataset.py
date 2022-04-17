@@ -21,7 +21,7 @@ packets_filename = os.path.join(dirname, 'data/packets.pickle')
 
 # 每个文件最大处理包数量
 TOTAL_PACKET = 128
-MTU_LENGTH = 512
+MTU_LENGTH = 1024
 
 
 # 是否需要忽略改包
